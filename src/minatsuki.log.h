@@ -1,17 +1,20 @@
 #pragma once
 #include <cstdio>
 #include <ctime>
+#include <cstring>
 #include <string>
 #include <exception>
 #include <utility>
 #include <type_traits>
 #include <list>
+#include <memory>
 
 #if defined(_MSC_VER)
 #pragma warning(disable:4996)
 #endif
 
 #define DEFAULT_OUTPUT "Minatsuki.log"
+#define MINATSUKI_LOG_VER "0.1"
 
 namespace minatsuki {
   using std::string;
@@ -20,34 +23,21 @@ namespace minatsuki {
   using std::is_same;
   using std::is_base_of;
   using std::list;
+  using std::strcmp;
+  using std::unique_ptr;
+  using std::make_unique;
 
   using CharList = list<char>;
-
-  class Decorator {
-  public:
-    virtual ~Decorator() {}
-    virtual const char *Head() = 0;
-    virtual const char *Tail() = 0;
-  };
-
-  class StandardDecorator : public Decorator {
-  public:
-    const char *Head() override {
-      auto now = time(nullptr);
-      return ctime(&now);
-    }
-
-    const char *Tail() override {
-      return "\n";
-    }
-  };
 
   class Writer {
   public:
     virtual ~Writer() {}
+    virtual bool Write(char) = 0;
+    virtual bool Write(CharList &) = 0;
     virtual bool Write(const char *, size_t) = 0;
     virtual bool Write(string &) = 0;
     virtual bool Write(string &&) = 0;
+    virtual bool Good() const = 0;
   };
 
   class StandardWriter : public Writer {
@@ -70,9 +60,30 @@ namespace minatsuki {
 
     void operator=(StandardWriter &) = delete;
     void operator=(StandardWriter &&rhs);
+    virtual bool Write(char c) override;
+    virtual bool Write(CharList &data) override;
     virtual bool Write(const char *data, size_t size = 0) override;
     virtual bool Write(string &data) override;
     virtual bool Write(string &&data) override { return Write(data); }
+    virtual bool Good() const override { return ptr_ != nullptr; }
+  };
+
+  class Decorator {
+  public:
+    virtual ~Decorator() {}
+    virtual void WriteHead(CharList &) = 0;
+    virtual bool WriteHead(Writer *) = 0;
+    virtual void WriteTail(CharList &) = 0;
+    virtual bool WriteTail(Writer *) = 0;
+  };
+
+  class StandardDecorator : public Decorator {
+  public:
+    void WriteHead(CharList &) override;
+    bool WriteHead(Writer *) override;
+    void WriteTail(CharList &) override { /* Do Nothing */ }
+    bool WriteTail(Writer *) override { return true; } /* Do Nothing */
+
   };
 
   class Agent {
@@ -82,11 +93,12 @@ namespace minatsuki {
     virtual bool WriteLine(string &) = 0;
     virtual bool WriteLine(string &&) = 0;
     virtual bool WriteLine(exception *e) = 0;
+    virtual bool Good() const = 0;
   };
 
   template <
-    typename _Decorator = StandardDecorator,
-    typename _Writer = StandardWriter>
+    typename _Writer = StandardWriter,
+    typename _Decorator = StandardDecorator>
   class CacheAgent : public Agent {
     static_assert(is_base_of<Decorator, _Decorator>::value, "Decorator error");
     static_assert(is_base_of<Writer, _Writer>::value, "Writer error");
@@ -97,7 +109,7 @@ namespace minatsuki {
     _Decorator decorator_;
 
   protected:
-    void CopyToCache(const char *data, size_t size);
+    void CopyToCache(const char *data, size_t size = 0);
     void CopyToCache(string &data);
 
   public:
@@ -118,15 +130,13 @@ namespace minatsuki {
     bool WriteLine(string &data) override;
     bool WriteLine(string &&data) override { return WriteLine(data); }
     bool WriteLine(exception *e) override;
+    bool Good() const override { return true; } //Do nothing
   };
 
   template<typename _Decorator, typename _Writer>
   void CacheAgent<_Decorator, _Writer>::CopyToCache(const char *data, size_t size) {
     size_t counter = 0;
     char const *pos = data;
-
-    cache_.push_back(CharList());
-
     auto &dest_list = cache_.back();
 
     while (*pos != '\0' || (size != 0 && counter < size)) {
@@ -138,47 +148,113 @@ namespace minatsuki {
 
   template<typename _Decorator, typename _Writer>
   void CacheAgent<_Decorator, _Writer>::CopyToCache(string &data) {
-    cache_.push_back(CharList());
-
     auto &dest_list = cache_.back();
 
     for (const auto &unit : data) {
-      dest_list.push_back(*pos);
+      dest_list.push_back(unit);
     }
   }
 
   template<typename _Decorator, typename _Writer>
-  CacheAgent<_Decorator, _Writer>::~CacheAgent() {
-
+  inline CacheAgent<_Decorator, _Writer>::~CacheAgent() {
+    Writer *writer = (strcmp(dest_, "stdout") == 0) ?
+      writer = new _Writer(stdout) :
+      writer = new _Writer(dest_, mode_);
+    
+    for (auto &line : cache_) {
+      writer->Write(line);
+      writer->Write("\n", 0);
+    }
+    delete writer;
   }
 
   template<typename _Decorator, typename _Writer>
-  bool CacheAgent<_Decorator, _Writer>::WriteLine(const char *data, size_t size) {
+  inline bool CacheAgent<_Decorator, _Writer>::WriteLine(const char *data, size_t size) {
+    cache_.push_back(CharList());
+    decorator_.WriteHead(cache_.back());
     CopyToCache(data, size);
+    decorator_.WriteTail(cache_.back());
     return true;
   }
 
   template<typename _Decorator, typename _Writer>
-  bool CacheAgent<_Decorator, _Writer>::WriteLine(string &data) {
+  inline bool CacheAgent<_Decorator, _Writer>::WriteLine(string &data) {
+    cache_.push_back(CharList());
+    decorator_.WriteHead(cache_.back());
     CopyToCache(data);
+    decorator_.WriteTail(cache_.back());
     return true;
   }
 
   template<typename _Decorator, typename _Writer>
-  bool CacheAgent<_Decorator, _Writer>::WriteLine(exception *e) {
+  inline bool CacheAgent<_Decorator, _Writer>::WriteLine(exception *e) {
+    cache_.push_back(CharList());
+    decorator_.WriteHead(cache_.back());
     CopyToCache(e->what());
+    decorator_.WriteTail(cache_.back());
     return true;
   }
 
   template <
-    typename _Decorator = StandardDecorator,
-    typename _Writer = StandardWriter>
+    typename _Writer = StandardWriter,
+    typename _Decorator = StandardDecorator>
   class RealTimeAgent : public Agent {
     static_assert(is_base_of<Decorator, _Decorator>::value, "Decorator error");
     static_assert(is_base_of<Writer, _Writer>::value, "Writer error");
   protected:
+    _Decorator decorator_;
+    _Writer writer_;
+    
+  public:
+    virtual ~RealTimeAgent() {}
+    RealTimeAgent() : writer_(DEFAULT_OUTPUT, "a+") {}
 
+    RealTimeAgent(const char *dest, const char *mode) :
+      writer_(dest, mode) {}
+
+    RealTimeAgent(string dest, string mode) :
+      writer_(dest.c_str(), mode.c_str()) {}
+
+    bool WriteLine(const char *data, size_t size = 0) override;
+    bool WriteLine(string &data) override;
+    bool WriteLine(string &&data) override { return WriteLine(data); }
+    bool WriteLine(exception *e) override;
+    bool Good() const override { return writer_.Good(); }
   };
 
+  template<typename _Decorator, typename _Writer>
+  inline bool RealTimeAgent<_Decorator, _Writer>::WriteLine(const char *data, size_t size) {
+    if (!writer_.Good()) return false;
+    bool result = true;
+    result = decorator_.WriteHead(&writer_);
+    result = writer_.Write(data, size);
+    result = decorator_.WriteTail(&writer_);
+    result = writer_.Write('\n');
+    return result;
+  }
 
+  template<typename _Writer, typename _Decorator>
+  inline bool RealTimeAgent<_Writer, _Decorator>::WriteLine(string &data) {
+    if (!writer_.Good()) return false;
+    bool result = true;
+    result = decorator_.WriteHead(&writer_);
+    result = writer_.Write(data);
+    result = decorator_.WriteTail(&writer_);
+    result = writer_.Write('\n');
+    return result;
+  }
+
+  template<typename _Writer, typename _Decorator>
+  inline bool RealTimeAgent<_Writer, _Decorator>::WriteLine(exception *e) {
+    if (!writer_.Good()) return false;
+    bool result = true;
+    result = decorator_.WriteHead(&writer_);
+    result = writer_.Write(e->what(), 0);
+    result = decorator_.WriteTail(&writer_);
+    result = writer_.Write('\n');
+    return result;
+  }
+
+  using StandardCacheAgent = CacheAgent<>;
+  using StandardRealTimeAgent = RealTimeAgent<>;
 }

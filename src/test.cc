@@ -3,10 +3,18 @@
 using namespace minatsuki;
 
 int main(int argc, char **argv) {
+  StandardRealTimeAgent agent("C:\\workspace\\Minatsuki.log", "a+");
   StandardWriter writer(stdout);
 
-  writer.Write("test");
-  writer.Write("test2\n");
+  auto now = time(nullptr);
+  writer.Write(ctime(&now));
+
+  for (size_t i = 0; i < 1000000; i += 1) {
+    agent.WriteLine("test");
+  }
+
+  now = time(nullptr);
+  writer.Write(ctime(&now));
 
   return 0;
 }

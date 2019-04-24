@@ -1,6 +1,22 @@
 #include "minatsuki.log.h"
 
 namespace minatsuki {
+  using namespace std;
+
+  bool StandardWriter::Write(char c) {
+    return fputc(c, ptr_) != EOF;
+  }
+
+  bool StandardWriter::Write(CharList &data) {
+    int flag = 0;
+    for (const auto &unit : data) {
+      flag = fputc(unit, ptr_);
+      if (flag == EOF) break;
+    }
+
+    return flag != EOF;
+  }
+
   void StandardWriter::operator=(StandardWriter &&rhs) {
     if (ptr_ != nullptr) {
       fclose(ptr_);
@@ -30,5 +46,30 @@ namespace minatsuki {
     }
     
     return flag != EOF;
+  }
+
+  void StandardDecorator::WriteHead(CharList &dest) {
+    auto now = time(nullptr);
+    auto *pos = ctime(&now);
+    dest.push_back('[');
+    while (*pos != '\n' && *pos != '\0') {
+      dest.push_back(*pos);
+      ++pos;
+    }
+    dest.push_back(']');
+  }
+
+  bool StandardDecorator::WriteHead(Writer *dest) {
+    auto now = time(nullptr);
+    auto *pos = ctime(&now);
+    bool flag = true;
+    dest->Write('[');
+    while (*pos != '\n' && *pos != '\0') {
+      flag = dest->Write(*pos);
+      if (!flag) break;
+      ++pos;
+    }
+    dest->Write(']');
+    return flag;
   }
 }
