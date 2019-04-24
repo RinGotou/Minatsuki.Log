@@ -1,10 +1,6 @@
 #include "minatsuki.log.h"
 
 namespace minatsuki {
-  StandardWriter::~StandardWriter() {
-    if (ptr_ != nullptr && ptr_ != stdout) fclose(ptr_);
-  }
-
   void StandardWriter::operator=(StandardWriter &&rhs) {
     if (ptr_ != nullptr) {
       fclose(ptr_);
