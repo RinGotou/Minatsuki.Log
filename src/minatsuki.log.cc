@@ -1,8 +1,8 @@
-#include "fastlog.h"
+#include "minatsuki.log.h"
 
-namespace fastlog {
+namespace minatsuki {
   StandardWriter::~StandardWriter() {
-    if (ptr_ != nullptr) fclose(ptr_);
+    if (ptr_ != nullptr && ptr_ != stdout) fclose(ptr_);
   }
 
   void StandardWriter::operator=(StandardWriter &&rhs) {

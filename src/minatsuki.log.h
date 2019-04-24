@@ -11,7 +11,7 @@
 #pragma warning(disable:4996)
 #endif
 
-namespace fastlog {
+namespace minatsuki {
   using std::string;
   using std::exception;
   using std::move;
@@ -52,7 +52,7 @@ namespace fastlog {
   public:
     virtual ~StandardWriter();
     StandardWriter() = delete;
-    StandardWriter(FILE *ptr = stdout) : ptr_(ptr) {}
+    StandardWriter(FILE *ptr) : ptr_(ptr) {}
     StandardWriter(const char *path, const char *mode) :
       ptr_(fopen(path, mode)) {}
     StandardWriter(string path, string mode) :
