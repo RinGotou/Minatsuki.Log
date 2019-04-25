@@ -53,7 +53,7 @@ namespace minatsuki {
     StandardWriter(const char *path, const char *mode) :
       ptr_(fopen(path, mode)) {}
     StandardWriter(string path, string mode) :
-      ptr_(fopen(path.c_str(), mode.c_str())) {}
+      ptr_(fopen(path.data(), mode.data())) {}
     StandardWriter(StandardWriter &) = delete;
     StandardWriter(StandardWriter &&rhs) :
       ptr_(rhs.ptr_) { rhs.ptr_ = nullptr; }
@@ -123,7 +123,7 @@ namespace minatsuki {
       dest_(dest), mode_(mode), cache_(), decorator_() {}
 
     CacheAgent(string dest, string mode) :
-      dest_(dest.c_str()), mode_(mode.c_str()),
+      dest_(dest.data()), mode_(mode.data()),
       cache_(), decorator_() {}
 
     bool WriteLine(const char *data, size_t size = 0) override;
@@ -213,7 +213,7 @@ namespace minatsuki {
       writer_(dest, mode) {}
 
     RealTimeAgent(string dest, string mode) :
-      writer_(dest.c_str(), mode.c_str()) {}
+      writer_(dest.data(), mode.data()) {}
 
     bool WriteLine(const char *data, size_t size = 0) override;
     bool WriteLine(string &data) override;
