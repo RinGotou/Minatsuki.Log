@@ -133,8 +133,8 @@ namespace minatsuki {
     bool Good() const override { return true; } //Do nothing
   };
 
-  template<typename _Decorator, typename _Writer>
-  void CacheAgent<_Decorator, _Writer>::CopyToCache(const char *data, size_t size) {
+  template<typename _Writer, typename _Decorator>
+  void CacheAgent<_Writer,_Decorator>::CopyToCache(const char *data, size_t size) {
     size_t counter = 0;
     char const *pos = data;
     auto &dest_list = cache_.back();
@@ -146,8 +146,8 @@ namespace minatsuki {
     }
   }
 
-  template<typename _Decorator, typename _Writer>
-  void CacheAgent<_Decorator, _Writer>::CopyToCache(string &data) {
+  template<typename _Writer, typename _Decorator>
+  void CacheAgent<_Writer, _Decorator>::CopyToCache(string &data) {
     auto &dest_list = cache_.back();
 
     for (const auto &unit : data) {
@@ -155,8 +155,8 @@ namespace minatsuki {
     }
   }
 
-  template<typename _Decorator, typename _Writer>
-  inline CacheAgent<_Decorator, _Writer>::~CacheAgent() {
+  template<typename _Writer, typename _Decorator>
+  inline CacheAgent<_Writer, _Decorator>::~CacheAgent() {
     Writer *writer = (strcmp(dest_, "stdout") == 0) ?
       writer = new _Writer(stdout) :
       writer = new _Writer(dest_, mode_);
@@ -168,8 +168,8 @@ namespace minatsuki {
     delete writer;
   }
 
-  template<typename _Decorator, typename _Writer>
-  inline bool CacheAgent<_Decorator, _Writer>::WriteLine(const char *data, size_t size) {
+  template<typename _Writer, typename _Decorator>
+  inline bool CacheAgent<_Writer, _Decorator>::WriteLine(const char *data, size_t size) {
     cache_.push_back(CharList());
     decorator_.WriteHead(cache_.back());
     CopyToCache(data, size);
@@ -177,8 +177,8 @@ namespace minatsuki {
     return true;
   }
 
-  template<typename _Decorator, typename _Writer>
-  inline bool CacheAgent<_Decorator, _Writer>::WriteLine(string &data) {
+  template<typename _Writer, typename _Decorator>
+  inline bool CacheAgent<_Writer, _Decorator>::WriteLine(string &data) {
     cache_.push_back(CharList());
     decorator_.WriteHead(cache_.back());
     CopyToCache(data);
@@ -186,8 +186,8 @@ namespace minatsuki {
     return true;
   }
 
-  template<typename _Decorator, typename _Writer>
-  inline bool CacheAgent<_Decorator, _Writer>::WriteLine(exception *e) {
+  template<typename _Writer, typename _Decorator>
+  inline bool CacheAgent<_Writer, _Decorator>::WriteLine(exception *e) {
     cache_.push_back(CharList());
     decorator_.WriteHead(cache_.back());
     CopyToCache(e->what());
@@ -222,8 +222,8 @@ namespace minatsuki {
     bool Good() const override { return writer_.Good(); }
   };
 
-  template<typename _Decorator, typename _Writer>
-  inline bool RealTimeAgent<_Decorator, _Writer>::WriteLine(const char *data, size_t size) {
+  template<typename _Writer, typename _Decorator>
+  inline bool RealTimeAgent<_Writer, _Decorator>::WriteLine(const char *data, size_t size) {
     if (!writer_.Good()) return false;
     bool result = true;
     result = decorator_.WriteHead(&writer_);
