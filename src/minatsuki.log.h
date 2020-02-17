@@ -50,8 +50,6 @@ namespace minatsuki {
 
     StandardWriter() = delete;
     StandardWriter(FILE *ptr) : ptr_(ptr) {}
-    StandardWriter(const char *path, const char *mode) :
-      ptr_(fopen(path, mode)) {}
     StandardWriter(string path, string mode) :
       ptr_(fopen(path.data(), mode.data())) {}
     StandardWriter(StandardWriter &) = delete;
@@ -86,9 +84,9 @@ namespace minatsuki {
 
   };
 
-  class Agent {
+  class StandardLogger {
   public:
-    virtual ~Agent() {}
+    virtual ~StandardLogger() {}
     virtual bool WriteLine(const char *, size_t) = 0;
     virtual bool WriteLine(string &) = 0;
     virtual bool WriteLine(string &&) = 0;
@@ -99,12 +97,12 @@ namespace minatsuki {
   template <
     typename _Writer = StandardWriter,
     typename _Decorator = StandardDecorator>
-  class CacheAgent : public Agent {
+  class CachedLogger : public StandardLogger {
     static_assert(is_base_of<Decorator, _Decorator>::value, "Decorator error");
     static_assert(is_base_of<Writer, _Writer>::value, "Writer error");
   protected:
-    const char *dest_;
-    const char *mode_;
+    string dest_;
+    string mode_;
     list<CharList> cache_;
     _Decorator decorator_;
 
@@ -113,17 +111,14 @@ namespace minatsuki {
     void CopyToCache(string &data);
 
   public:
-    virtual ~CacheAgent();
+    virtual ~CachedLogger();
 
-    CacheAgent() : 
+    CachedLogger() : 
       dest_(DEFAULT_OUTPUT),
-      mode_("a+"), cache_(), decorator_() {}
+      mode_("a"), cache_(), decorator_() {}
 
-    CacheAgent(const char *dest, const char *mode) :
-      dest_(dest), mode_(mode), cache_(), decorator_() {}
-
-    CacheAgent(string dest, string mode) :
-      dest_(dest.data()), mode_(mode.data()),
+    CachedLogger(string dest, string mode) :
+      dest_(dest), mode_(mode),
       cache_(), decorator_() {}
 
     bool WriteLine(const char *data, size_t size = 0) override;
@@ -134,7 +129,7 @@ namespace minatsuki {
   };
 
   template<typename _Writer, typename _Decorator>
-  void CacheAgent<_Writer,_Decorator>::CopyToCache(const char *data, size_t size) {
+  void CachedLogger<_Writer,_Decorator>::CopyToCache(const char *data, size_t size) {
     size_t counter = 0;
     char const *pos = data;
     auto &dest_list = cache_.back();
@@ -147,7 +142,7 @@ namespace minatsuki {
   }
 
   template<typename _Writer, typename _Decorator>
-  void CacheAgent<_Writer, _Decorator>::CopyToCache(string &data) {
+  void CachedLogger<_Writer, _Decorator>::CopyToCache(string &data) {
     auto &dest_list = cache_.back();
 
     for (const auto &unit : data) {
@@ -156,20 +151,21 @@ namespace minatsuki {
   }
 
   template<typename _Writer, typename _Decorator>
-  inline CacheAgent<_Writer, _Decorator>::~CacheAgent() {
-    Writer *writer = (strcmp(dest_, "stdout") == 0) ?
+  inline CachedLogger<_Writer, _Decorator>::~CachedLogger() {
+    Writer *writer = (strcmp(dest_.data(), "stdout") == 0) ?
       writer = new _Writer(stdout) :
       writer = new _Writer(dest_, mode_);
     
-    for (auto &line : cache_) {
-      writer->Write(line);
+    for (auto it = cache_.begin(); it != cache_.end(); ++it) {
+      writer->Write(*it);
       writer->Write("\n", 0);
     }
+
     delete writer;
   }
 
   template<typename _Writer, typename _Decorator>
-  inline bool CacheAgent<_Writer, _Decorator>::WriteLine(const char *data, size_t size) {
+  inline bool CachedLogger<_Writer, _Decorator>::WriteLine(const char *data, size_t size) {
     cache_.push_back(CharList());
     decorator_.WriteHead(cache_.back());
     CopyToCache(data, size);
@@ -178,7 +174,7 @@ namespace minatsuki {
   }
 
   template<typename _Writer, typename _Decorator>
-  inline bool CacheAgent<_Writer, _Decorator>::WriteLine(string &data) {
+  inline bool CachedLogger<_Writer, _Decorator>::WriteLine(string &data) {
     cache_.push_back(CharList());
     decorator_.WriteHead(cache_.back());
     CopyToCache(data);
@@ -187,7 +183,7 @@ namespace minatsuki {
   }
 
   template<typename _Writer, typename _Decorator>
-  inline bool CacheAgent<_Writer, _Decorator>::WriteLine(exception *e) {
+  inline bool CachedLogger<_Writer, _Decorator>::WriteLine(exception *e) {
     cache_.push_back(CharList());
     decorator_.WriteHead(cache_.back());
     CopyToCache(e->what());
@@ -198,7 +194,7 @@ namespace minatsuki {
   template <
     typename _Writer = StandardWriter,
     typename _Decorator = StandardDecorator>
-  class RealTimeAgent : public Agent {
+  class RTLogger : public StandardLogger {
     static_assert(is_base_of<Decorator, _Decorator>::value, "Decorator error");
     static_assert(is_base_of<Writer, _Writer>::value, "Writer error");
   protected:
@@ -206,13 +202,13 @@ namespace minatsuki {
     _Writer writer_;
     
   public:
-    virtual ~RealTimeAgent() {}
-    RealTimeAgent() : writer_(DEFAULT_OUTPUT, "a+") {}
+    virtual ~RTLogger() {}
+    RTLogger() : writer_(DEFAULT_OUTPUT, "a") {}
 
-    RealTimeAgent(const char *dest, const char *mode) :
+    RTLogger(const char *dest, const char *mode) :
       writer_(dest, mode) {}
 
-    RealTimeAgent(string dest, string mode) :
+    RTLogger(string dest, string mode) :
       writer_(dest.data(), mode.data()) {}
 
     bool WriteLine(const char *data, size_t size = 0) override;
@@ -223,7 +219,7 @@ namespace minatsuki {
   };
 
   template<typename _Writer, typename _Decorator>
-  inline bool RealTimeAgent<_Writer, _Decorator>::WriteLine(const char *data, size_t size) {
+  inline bool RTLogger<_Writer, _Decorator>::WriteLine(const char *data, size_t size) {
     if (!writer_.Good()) return false;
     bool result = true;
     result = decorator_.WriteHead(&writer_);
@@ -234,7 +230,7 @@ namespace minatsuki {
   }
 
   template<typename _Writer, typename _Decorator>
-  inline bool RealTimeAgent<_Writer, _Decorator>::WriteLine(string &data) {
+  inline bool RTLogger<_Writer, _Decorator>::WriteLine(string &data) {
     if (!writer_.Good()) return false;
     bool result = true;
     result = decorator_.WriteHead(&writer_);
@@ -245,7 +241,7 @@ namespace minatsuki {
   }
 
   template<typename _Writer, typename _Decorator>
-  inline bool RealTimeAgent<_Writer, _Decorator>::WriteLine(exception *e) {
+  inline bool RTLogger<_Writer, _Decorator>::WriteLine(exception *e) {
     if (!writer_.Good()) return false;
     bool result = true;
     result = decorator_.WriteHead(&writer_);
@@ -255,6 +251,6 @@ namespace minatsuki {
     return result;
   }
 
-  using StandardCacheAgent = CacheAgent<>;
-  using StandardRealTimeAgent = RealTimeAgent<>;
+  using StandardCachedLogger = CachedLogger<>;
+  using StandardRTLogger = RTLogger<>;
 }
